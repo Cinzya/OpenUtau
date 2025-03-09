@@ -3,6 +3,7 @@ import random
 import torch
 import tqdm
 import editdistance
+import argparse
 from torch import nn
 from torch.optim import Adam
 from torch.optim.lr_scheduler import ExponentialLR
@@ -27,7 +28,7 @@ class G2pTrainer():
                  lr: float = 0.005,
                  min_lr: float = 5e-5,
                  gamma: float = 0.8,
-                 grad_clip: float = 2,
+                 grad_clip: float = 5,
                  seed=None) -> None:
         self.device = device
         self.loss_device = loss_device
@@ -144,27 +145,30 @@ class G2pTrainer():
             preview_entries.append(self.dataset.entries[idx])
 
         best_eval_loss = 10000
-        for i in range(self.epochs):
-            loss = self._train_epoch()
-            eval_loss = self._eval()
-            lr = self.scheduler.get_last_lr()[0]
-            print('epoch: {} - lr: {:.2e} - loss: {:.4f} - eval_loss: {:.4f}'
-                  .format(i, lr, loss, eval_loss))
-            if math.isnan(loss) or math.isnan(eval_loss):
-                break
+        with open('training_log.txt', 'a') as f:
+             for i in range(self.epochs):
+                loss = self._train_epoch()
+                eval_loss = self._eval()
+                lr = self.scheduler.get_last_lr()[0]
 
-            if lr > self.min_lr:
-                self.scheduler.step()
+                f.write(f'epoch: {i} - lr: {lr:.2e} - loss: {loss:.4f} - eval_loss: {eval_loss:.4f}\n')
+                print('epoch: {} - lr: {:.2e} - loss: {:.4f} - eval_loss: {:.4f}'
+                      .format(i, lr, loss, eval_loss))
+                if math.isnan(loss) or math.isnan(eval_loss):
+                    break
 
-            if best_eval_loss > eval_loss:
-                best_eval_loss = eval_loss
-                print('saving new best at epoch {}'.format(i))
-                self._save_state_dic('best')
-            if (i + 1) % 20 == 0:
-                self._save_state_dic('{:03d}'.format(i + 1))
+                if lr > self.min_lr:
+                    self.scheduler.step()
 
-            for entry in preview_entries:
-                self._preview(entry)
+                if best_eval_loss > eval_loss:
+                    best_eval_loss = eval_loss
+                    print('saving new best at epoch {}'.format(i))
+                    self._save_state_dic('best')
+                if (i + 1) % 1 == 0:
+                    self._save_state_dic('{:03d}'.format(i + 1))
+
+                for entry in preview_entries:
+                    self._preview(entry)
 
     # Calculates the WER and PER of the model on the entire dataset.
     # Very very slow.
